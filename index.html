@@ -41,15 +41,20 @@
         <section class="filler filler--tetris">
             <main>
                 <section id="tetris-demo">
-                    <h2>Tetris RL Agent</h2>
-                    <p>A genetic-algorithm-trained neural net playing a full game of Tetris.</p>
-
-                    <div class="tetris-stats">
-                        <span>Score: <strong id="tetris-score">0</strong></span>
-                        <span>Lines: <strong id="tetris-lines">0</strong></span>
+                    <div class="tetris-info">
+                        <h2>Tetris RL Agent</h2>
+                        <p>I built this Tetris engine from scratch to match the mechanics of tetris.com, including piece rotation with wall kicks, hold, a next piece queue, and scoring. It also works as a full training environment for a genetic algorithm agent.</p>
+                        <p>The agent doesn't follow hand written rules. Its neural network was evolved over generations instead. For every legal placement of the falling piece, every rotation and every column, it simulates the resulting board, scores each outcome, and plays the best one. Each generation, the top performers are bred through weighted crossover and mutated weights, with elitism and checkpointing preserving progress along the way.</p>
+                        <p>On a strong run it scores over 450,000 points, roughly 5x to 9x a typical casual player's average of 50,000 to 100,000.</p>
                     </div>
 
-                    <canvas id="tetris-canvas"></canvas>
+                    <div class="tetris-canvas-wrap">
+                        <div class="tetris-stats">
+                            <span>Score: <strong id="tetris-score">0</strong></span>
+                            <span>Lines: <strong id="tetris-lines">0</strong></span>
+                        </div>
+                        <canvas id="tetris-canvas"></canvas>
+                    </div>
                 </section>
             </main>
         </section>

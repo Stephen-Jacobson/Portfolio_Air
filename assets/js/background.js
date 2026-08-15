@@ -49,6 +49,15 @@ const COLOURS = [
   [0, 255, 0], // green
   [0, 0, 255], // blue
 ];
+// const COLOURS = [
+//   [0, 255, 255],   // I - cyan
+//   [255, 255, 0],   // O - yellow
+//   [160, 0, 160],   // T - purple
+//   [0, 255, 0],     // S - green
+//   [255, 0, 0],     // Z - red
+//   [0, 0, 255],     // J - blue
+//   [255, 165, 0],   // L - orange
+// ];
 
 let lineIndex = 0;
 

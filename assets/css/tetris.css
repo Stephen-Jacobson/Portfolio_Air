@@ -4,43 +4,73 @@
 .filler--tetris {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-end;
-  padding: 1vh 6vw 0 6vw;
+  justify-content: center;
+  padding: 12vh 6vw 0 6vw;
 }
 
 #tetris-demo {
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 56px;
   color: #fff;
-  max-width: 360px;
+  width: min(1100px, 92vw);
 }
 
-#tetris-demo h2 {
-  font-size: clamp(1.25rem, 3vw, 2rem);
-  margin-bottom: 8px;
+.tetris-info {
+  text-align: left;
+  flex: 1 1 auto;
 }
 
-#tetris-demo p {
-  opacity: 0.7;
-  margin-bottom: 20px;
+.tetris-info h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.tetris-info p {
+  opacity: 0.75;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.tetris-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .tetris-stats {
   display: flex;
   justify-content: flex-end;
   gap: 24px;
-  margin-bottom: 16px;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   opacity: 0.85;
 }
 
-/* Fixed aspect ratio (10 cols : 24 rows) so the canvas never distorts —
+/* Fixed aspect ratio (10 cols : 20 rows) so the canvas never distorts —
    width is flexible/responsive, height follows automatically. */
 #tetris-canvas {
   display: block;
-  margin: 0 0 0 auto;
-  width: min(80vw, 320px);
+  flex-shrink: 0;
+  width: min(35vw, 300px);
   aspect-ratio: 10 / 20;
   background: #0a0b0d;
   border: 1px solid rgba(255, 255, 255, 0.15);
   image-rendering: pixelated;
+}
+
+@media (max-width: 560px) {
+  #tetris-demo {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 90vw;
+  }
+
+  #tetris-canvas {
+    width: min(70vw, 260px);
+  }
 }
