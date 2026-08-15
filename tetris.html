@@ -1,0 +1,19 @@
+<!--
+  Drop this <section> anywhere inside your .container in index.html
+  (e.g. inside <main>), and add tetris_run.json under assets/data/
+  and tetris-replay.js under assets/js/, then add this before
+  </body>, after your other scripts:
+
+      <script src="assets/js/tetris-replay.js"></script>
+-->
+<section id="tetris-demo">
+  <h2>Tetris RL Agent</h2>
+  <p>A genetic-algorithm-trained neural net playing a full game of Tetris. Recorded, not live.</p>
+
+  <div class="tetris-stats">
+    <span>Score: <strong id="tetris-score">0</strong></span>
+    <span>Lines: <strong id="tetris-lines">0</strong></span>
+  </div>
+
+  <canvas id="tetris-canvas"></canvas>
+</section>

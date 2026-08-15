@@ -1,0 +1,43 @@
+/* Browsers add ~8px of default margin around <body> — this was the source
+   of the gaps on the sides (and top) that no other rule was overriding. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Hero fills the first screen so the text sits centered directly over
+   the animation. Background stays transparent here so the fixed canvas
+   underneath shows through. */
+#hero {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* clamp(min, preferred, max) scales the font size with viewport width
+   (the "vw" unit) between the min and max bounds — this is what makes
+   the text resize proportionally as the window changes size, instead
+   of jumping between fixed sizes at breakpoints. */
+.hero-title {
+  font-size: clamp(2rem, 8vw, 6rem);
+  color: #fff;
+  margin: 0;
+}
+
+/* Plain black sections to scroll through for now. The animation stays
+   fixed in place behind these since #bg-viewport is position: fixed —
+   scrolling this content never moves it. */
+.filler {
+  height: 100vh;
+  background: #000;
+}

@@ -1,0 +1,46 @@
+/* One of the plain black .filler boxes, repurposed to host the demo
+   anchored to its bottom-right corner instead of filling the whole
+   section. Padding keeps it off the very edge of the viewport. */
+.filler--tetris {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 1vh 6vw 0 6vw;
+}
+
+#tetris-demo {
+  text-align: right;
+  color: #fff;
+  max-width: 360px;
+}
+
+#tetris-demo h2 {
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  margin-bottom: 8px;
+}
+
+#tetris-demo p {
+  opacity: 0.7;
+  margin-bottom: 20px;
+}
+
+.tetris-stats {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24px;
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  opacity: 0.85;
+}
+
+/* Fixed aspect ratio (10 cols : 24 rows) so the canvas never distorts —
+   width is flexible/responsive, height follows automatically. */
+#tetris-canvas {
+  display: block;
+  margin: 0 0 0 auto;
+  width: min(80vw, 320px);
+  aspect-ratio: 10 / 20;
+  background: #0a0b0d;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  image-rendering: pixelated;
+}

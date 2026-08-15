@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>My First Page</title>
+        <link rel="stylesheet" href="assets/css/style.css" />
+        <link rel="stylesheet" href="assets/css/background.css" />
+        <link rel="stylesheet" href="assets/css/tetris.css" />
+    </head>
+    <body style="background-color:black;">
+        <!-- bg-viewport is the "window" the user looks through. It's fixed to
+             the screen and clips (overflow: hidden) anything outside it.
+             The canvas inside stays a constant, fixed size and is centered
+             with CSS — so resizing the browser only changes how much of the
+             canvas is visible, never the canvas's own pixel data. -->
+        <div id="bg-viewport">
+            <canvas id="c"></canvas>
+        </div>
+
+        <div class="container">
+            <!-- hero is the first screen, sitting directly over the animation.
+                 background.js watches this element: the animation only runs
+                 while hero is on screen, and pauses once you scroll past it. -->
+            <section id="hero">
+                <h1 class="hero-title">Stephen Jacobson</h1>
+            </section>
+
+            
+
+            
+        </div>
+
+        <!-- Sits directly in normal document flow, full window width (kept
+             outside .container so it isn't clipped to the 1200px max-width).
+             A negative top margin pulls it upward without changing where its
+             OWN bottom edge sits — so no matter how tall the content above
+             it is (hero, main, etc.), its bottom always lands exactly on the
+             top edge of the black filler box that follows it. -->
+        <div id="blur-overlay"></div>
+
+        <!-- plain black filler sections to scroll through for now -->
+        <section class="filler filler--tetris">
+            <main>
+                <section id="tetris-demo">
+                    <h2>Tetris RL Agent</h2>
+                    <p>A genetic-algorithm-trained neural net playing a full game of Tetris.</p>
+
+                    <div class="tetris-stats">
+                        <span>Score: <strong id="tetris-score">0</strong></span>
+                        <span>Lines: <strong id="tetris-lines">0</strong></span>
+                    </div>
+
+                    <canvas id="tetris-canvas"></canvas>
+                </section>
+            </main>
+        </section>
+        <section class="filler"></section>
+        
+
+        <div class="container">
+            <footer>...</footer>
+        </div>
+
+        <script src="assets/js/background.js"></script>
+        <script src="assets/js/main.js"></script>
+        <script src="assets/js/tetris-replay.js"></script>
+    </body>
+</html>

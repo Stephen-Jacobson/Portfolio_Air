@@ -1,0 +1,55 @@
+:root {
+  --canvas-z: -1;          /* stacking depth: negative = behind page content */
+  --canvas-opacity: 0.6;   /* 0 = invisible, 1 = fully opaque */
+  --blur-height: 7vh;     /* how tall the blurred region at the bottom is */
+  --blur-amount: 15px;     /* how strong the blur gets at the very bottom */
+}
+
+/* This is the crop window. It's always exactly the size of the browser
+   viewport, and overflow: hidden clips anything outside it — that clipping
+   is what makes the "visible area moves, the data underneath doesn't" effect. */
+#bg-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: var(--canvas-z);
+  pointer-events: none;
+}
+
+/* The canvas is NEVER resized by JS after its initial fixed size is set.
+   It's centered inside bg-viewport with top/left 50% + a transform that
+   pulls it back by half its own size — the standard CSS centering trick.
+   As the window shrinks, this stays centered and just gets clipped evenly
+   on all sides by the overflow: hidden on the parent. */
+#c {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: var(--canvas-opacity);
+}
+
+/* A normal (non-absolute, non-fixed) block sitting in the document flow
+   right before the first .filler section. It's NOT inside .container, so
+   its width is the full body width — full window width, not clipped to
+   the 1200px max-width.
+
+   margin-top: -blur-height pulls the box upward to overlap the content
+   above it, but only moves its TOP edge — the bottom edge stays exactly
+   where it would have landed in normal flow, which is precisely the top
+   of the .filler box that follows. That's what keeps it flush against
+   the black box regardless of how tall the content above it is. */
+#blur-overlay {
+  position: relative;
+  height: var(--blur-height);
+  margin-top: calc(var(--blur-height) * -1);
+  z-index: calc(var(--canvas-z) + 1);
+  pointer-events: none;
+  backdrop-filter: blur(var(--blur-amount));
+  -webkit-backdrop-filter: blur(var(--blur-amount));
+  mask-image: linear-gradient(to bottom, transparent, black);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black);
+}
