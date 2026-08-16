@@ -18,6 +18,52 @@ let speedMap = new Float32Array(0);
 let imageData;
 let data;
 
+let orientation = 'vertical';     // toggle: 'horizontal' or 'vertical'
+
+// --- Active-particle tracking -------------------------------------------
+// Instead of scanning all MAX slots every frame and checking age[i] === 0,
+// we keep a packed list of just the currently-alive particle indices
+// (activeList[0..activeCount)). updateParticles() and render() then only
+// ever touch exactly as many slots as are actually alive, instead of
+// always doing MAX work regardless of how empty the screen is.
+//
+// freeList is a stack of currently-unused slot indices, so spawning a
+// particle is an O(1) pop instead of a linear scan for the next age===0
+// slot (which is what the old emitLine/emitCircle did).
+const activeList = new Int32Array(MAX);
+let activeCount = 0;
+const slotOf = new Int32Array(MAX).fill(-1); // slotOf[i] = position of particle i within activeList, or -1 if dead
+
+const freeList = new Int32Array(MAX);
+let freeCount = MAX;
+for (let i = 0; i < MAX; i++) freeList[i] = MAX - 1 - i; // order doesn't matter, just needs to cover 0..MAX-1
+
+// Allocates a slot for a new particle. Returns its index, or -1 if every
+// slot is currently in use (caller should just stop spawning early).
+function spawnParticle() {
+  if (freeCount === 0) return -1;
+  const i = freeList[--freeCount];
+  slotOf[i] = activeCount;
+  activeList[activeCount] = i;
+  activeCount++;
+  age[i] = 1;
+  return i;
+}
+
+// Frees slot i. Uses swap-removal so this is O(1) instead of shifting the
+// whole array down.
+function killParticle(i) {
+  const slot = slotOf[i];
+  if (slot === -1) return; // already dead
+  const lastActiveIndex = activeList[activeCount - 1];
+  activeList[slot] = lastActiveIndex;
+  slotOf[lastActiveIndex] = slot;
+  activeCount--;
+  slotOf[i] = -1;
+  age[i] = 0;
+  freeList[freeCount++] = i;
+}
+
 // Runs ONCE, when the image loads. Canvas is sized to match the image
 // exactly, and this size is never changed again — no resize listener
 // touches canvas.width/height. Centering as the browser window changes
@@ -65,20 +111,28 @@ function emitLine() {
   const colour = COLOURS[lineIndex % COLOURS.length];
   lineIndex++;
 
-  let row = 0;
-  for (let i = 0; i < MAX && row < canvas.height; i++) {
-    if (age[i] === 0) {
+  const isHorizontal = orientation === 'horizontal';
+  const limit = isHorizontal ? canvas.height : canvas.width;
+
+  for (let pos = 0; pos < limit; pos++) {
+    const i = spawnParticle();
+    if (i === -1) break; // no free slots left, stop early instead of scanning further
+
+    if (isHorizontal) {
       px[i] = 0;
-      py[i] = row;
+      py[i] = pos;
       vx[i] = 1.2;
       vy[i] = 0;
-      age[i] = 1;
-
-      cr[i] = colour[0];
-      cg[i] = colour[1];
-      cb[i] = colour[2];
-      row++;
+    } else {
+      px[i] = pos;
+      py[i] = 0;
+      vx[i] = 0;
+      vy[i] = 1.2;
     }
+
+    cr[i] = colour[0];
+    cg[i] = colour[1];
+    cb[i] = colour[2];
   }
 }
 
@@ -96,17 +150,16 @@ canvas.addEventListener("click", (e) => {
 function emitCircle() {
   const numParticles = 500;
   const radius = 10;
-  let spawned = 0;
-  for (let i = 0; i < MAX && spawned < numParticles; i++) {
-    if (age[i] === 0) {
-      const angle = (spawned / numParticles) * Math.PI * 2;
-      px[i] = mouseX + Math.cos(angle) * radius;
-      py[i] = mouseY + Math.sin(angle) * radius;
-      vx[i] = Math.cos(angle) * 2.0;
-      vy[i] = Math.sin(angle) * 2.0;
-      age[i] = 1;
-      spawned++;
-    }
+
+  for (let spawned = 0; spawned < numParticles; spawned++) {
+    const i = spawnParticle();
+    if (i === -1) break; // no free slots left
+
+    const angle = (spawned / numParticles) * Math.PI * 2;
+    px[i] = mouseX + Math.cos(angle) * radius;
+    py[i] = mouseY + Math.sin(angle) * radius;
+    vx[i] = Math.cos(angle) * 2.0;
+    vy[i] = Math.sin(angle) * 2.0;
   }
 }
 
@@ -157,10 +210,16 @@ if (heroEl) {
   heroObserver.observe(heroEl);
 }
 
+// Only iterates over currently-alive particles (activeCount of them)
+// instead of always scanning all MAX slots.
 function updateParticles(dt) {
-  for (let i = 0; i < MAX; i++) {
-    if (age[i] === 0) continue;
-    let speed = speedMap[Math.floor(py[i]) * canvas.width + Math.floor(px[i])];
+  const w = canvas.width;
+  const h = canvas.height;
+
+  for (let n = 0; n < activeCount; n++) {
+    const i = activeList[n];
+
+    const speed = speedMap[(py[i] | 0) * w + (px[i] | 0)];
     px[i] += vx[i] * speed * dt;
     py[i] += vy[i] * speed * dt;
 
@@ -168,28 +227,58 @@ function updateParticles(dt) {
 
     if (
       age[i] > 200000 ||
-      px[i] > canvas.width ||
+      px[i] > w ||
       px[i] < 0 ||
-      py[i] > canvas.height ||
+      py[i] > h ||
       py[i] < 0
     ) {
-      age[i] = 0;
+      killParticle(i);
+      n--; // swap-removal moved a different particle into slot n, recheck it next iteration
     }
   }
 }
 
+let PARTICLE_SIZE = 2; // toggle: 1 = single pixel, 2 = 2x2, 3 = 3x3, etc.
+
+// Only iterates over currently-alive particles instead of all MAX slots.
 function render() {
   data.fill(0);
 
-  for (let i = 0; i < MAX; i++) {
-    if (age[i] === 0) continue;
-    const ix = Math.floor(px[i]);
-    const iy = Math.floor(py[i]);
-    const idx = (iy * canvas.width + ix) * 4;
-    data[idx] = cr[i];
-    data[idx + 1] = cg[i];
-    data[idx + 2] = cb[i];
-    data[idx + 3] = 255;
+  const w = canvas.width;
+  const h = canvas.height;
+  const half = PARTICLE_SIZE >> 1;
+
+  for (let n = 0; n < activeCount; n++) {
+    const i = activeList[n];
+    const ix = px[i] | 0;
+    const iy = py[i] | 0;
+
+    if (PARTICLE_SIZE <= 1) {
+      // Fast path for the common single-pixel case, skips the nested loop entirely.
+      if (ix < 0 || ix >= w || iy < 0 || iy >= h) continue;
+      const idx = (iy * w + ix) * 4;
+      data[idx] = cr[i];
+      data[idx + 1] = cg[i];
+      data[idx + 2] = cb[i];
+      data[idx + 3] = 255;
+      continue;
+    }
+
+    for (let oy = -half; oy < PARTICLE_SIZE - half; oy++) {
+      const y = iy + oy;
+      if (y < 0 || y >= h) continue;
+
+      for (let ox = -half; ox < PARTICLE_SIZE - half; ox++) {
+        const x = ix + ox;
+        if (x < 0 || x >= w) continue;
+
+        const idx = (y * w + x) * 4;
+        data[idx] = cr[i];
+        data[idx + 1] = cg[i];
+        data[idx + 2] = cb[i];
+        data[idx + 3] = 255;
+      }
+    }
   }
 
   ctx.putImageData(imageData, 0, 0);
