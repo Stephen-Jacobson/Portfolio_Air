@@ -24,14 +24,18 @@
   text-align: center;
 }
 
-/* clamp(min, preferred, max) scales the font size with viewport width
-   (the "vw" unit) between the min and max bounds — this is what makes
-   the text resize proportionally as the window changes size, instead
-   of jumping between fixed sizes at breakpoints. */
+/* The letters themselves stay invisible (kept in the DOM for
+   accessibility/SEO/selection) — background.js reads this element's
+   font and on-screen position to build a letter-shaped mask, then draws
+   the particle animation in colour ONLY inside that shape (white
+   everywhere else). The visible "text" you see is really the canvas
+   underneath, not this element. */
 .hero-title {
-  font-size: clamp(2rem, 8vw, 6rem);
-  color: #fff;
+  position: relative;
+  font-size: clamp(1.8rem, 9.2vw, 7.2rem);
+  font-weight: 700;
   margin: 0;
+  color: transparent;
 }
 
 /* Plain black sections to scroll through for now. The animation stays

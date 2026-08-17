@@ -4,7 +4,8 @@
 // the "intelligence" already happened once, locally, in record_game.py.
 
 (function () {
-  const DATA_URL = "assets/data/tetris_run.json";
+  const runNumber = Math.floor(Math.random() * 3) + 1;
+  const DATA_URL = `assets/data/tetris_run_${runNumber}.json`;
   const FRAME_MS = 110;       // time between recorded frames during playback
   const END_PAUSE_MS = 2000;  // pause on the final frame before looping
   const COLS = 10;

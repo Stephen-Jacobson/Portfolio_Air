@@ -19,7 +19,12 @@
         <div class="container">
             <!-- hero is the first screen, sitting directly over the animation.
                  background.js watches this element: the animation only runs
-                 while hero is on screen, and pauses once you scroll past it. -->
+                 while hero is on screen, and pauses once you scroll past it.
+                 It also reads this element's font/position to build the
+                 letter-shaped mask that reveals coloured particles only
+                 inside the letters — the text itself stays invisible
+                 (color: transparent in CSS), it's the canvas underneath
+                 doing the visible work. -->
             <section id="hero">
                 <h1 class="hero-title">Stephen Jacobson</h1>
             </section>

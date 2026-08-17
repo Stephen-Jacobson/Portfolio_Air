@@ -14,6 +14,8 @@ const cr = new Uint8Array(MAX); // red 0-255
 const cg = new Uint8Array(MAX); // green 0-255
 const cb = new Uint8Array(MAX); // blue 0-255
 
+const LINE_PER_FRAME = 15;
+
 let speedMap = new Float32Array(0);
 let imageData;
 let data;
@@ -64,6 +66,71 @@ function killParticle(i) {
   freeList[freeCount++] = i;
 }
 
+// --- Letter mask ----------------------------------------------------------
+// A 1-byte-per-pixel array, same width/height as the canvas, marking which
+// canvas pixels fall inside the hero title's letter shapes (1) vs outside
+// (0). render() uses this to decide whether a particle shows its real
+// assigned colour (inside a letter) or the OUTSIDE_COLOUR (everywhere else).
+//
+// This has to be built in CANVAS pixel space, not DOM/CSS space, since the
+// particle simulation only knows about px/py canvas coordinates. We get
+// there by comparing the on-screen bounding boxes of the canvas element and
+// the title element (both from getBoundingClientRect, so both are in the
+// same viewport-relative coordinate space) and drawing the text at the
+// equivalent offset into an offscreen canvas matching the main canvas's
+// pixel grid 1:1.
+let textMask = new Uint8Array(0);
+
+function buildTextMask() {
+  const title = document.querySelector('.hero-title');
+  if (!title || !canvas.width || !canvas.height) return;
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const titleRect = title.getBoundingClientRect();
+  const style = getComputedStyle(title);
+
+  const off = document.createElement('canvas');
+  off.width = canvas.width;
+  off.height = canvas.height;
+  const octx = off.getContext('2d');
+
+  octx.fillStyle = '#fff';
+  octx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  octx.textBaseline = 'middle';
+  octx.textAlign = 'center';
+
+  // titleRect.top is scroll-dependent (it shrinks/goes negative as you
+  // scroll down), but canvasRect.top is NOT — the canvas is position:
+  // fixed, so it never moves regardless of scroll. If buildTextMask() runs
+  // while the page is scrolled away from the hero (e.g. a reload that
+  // restores scroll position below the fold), using titleRect.top directly
+  // bakes in the wrong offset — the mask ends up placed wherever the title
+  // happened to be on screen at that scroll position, not where it sits
+  // relative to the canvas when the hero is actually in view.
+  //
+  // Normalize by adding window.scrollY back, which converts the current
+  // viewport-relative top into the same "as if scrollY were 0" position
+  // that canvasRect.top is already expressed in.
+  const normalizedTitleTop = titleRect.top + window.scrollY;
+
+  // Title's center point, translated from viewport space into the canvas's
+  // own pixel space by subtracting the canvas's viewport offset.
+  const textX = titleRect.left + titleRect.width / 2 - canvasRect.left;
+  const textY = normalizedTitleTop + titleRect.height / 2 - canvasRect.top;
+  octx.fillText(title.textContent.trim(), textX, textY);
+
+  const maskPixels = octx.getImageData(0, 0, off.width, off.height).data;
+
+  textMask = new Uint8Array(canvas.width * canvas.height);
+  for (let p = 0; p < textMask.length; p++) {
+    textMask[p] = maskPixels[p * 4 + 3] > 0 ? 1 : 0; // alpha channel marks drawn text
+  }
+}
+
+// Rebuild whenever layout could have shifted the title's position/size
+// relative to the canvas (e.g. clamp() font-size responding to width).
+window.addEventListener('resize', buildTextMask);
+
 // Runs ONCE, when the image loads. Canvas is sized to match the image
 // exactly, and this size is never changed again — no resize listener
 // touches canvas.width/height. Centering as the browser window changes
@@ -83,18 +150,18 @@ function buildSpeedMap(img) {
   speedMap = new Float32Array(canvas.width * canvas.height);
   for (let i = 0; i < speedMap.length; i++) {
     const brightness = pixels[i * 4] / 255;
-    speedMap[i] = 0.05 + (1.0 - brightness) * 0.95;
+    speedMap[i] = 0.20 + (1.0 - brightness) * 0.80;
   }
 
   imageData = ctx.createImageData(canvas.width, canvas.height);
   data = imageData.data;
 }
 
-const COLOURS = [
-  [255, 0, 0], // red
-  [0, 255, 0], // green
-  [0, 0, 255], // blue
-];
+// const COLOURS = [
+//   [255, 0, 0], // red
+//   [0, 255, 0], // green
+//   [0, 0, 255], // blue
+// ];
 // const COLOURS = [
 //   [0, 255, 255],   // I - cyan
 //   [255, 255, 0],   // O - yellow
@@ -104,7 +171,9 @@ const COLOURS = [
 //   [0, 0, 255],     // J - blue
 //   [255, 165, 0],   // L - orange
 // ];
-
+const COLOURS = [
+  [255, 255, 255], // white
+]
 let lineIndex = 0;
 
 function emitLine() {
@@ -121,13 +190,13 @@ function emitLine() {
     if (isHorizontal) {
       px[i] = 0;
       py[i] = pos;
-      vx[i] = 1.2;
+      vx[i] = 2;
       vy[i] = 0;
     } else {
       px[i] = pos;
       py[i] = 0;
       vx[i] = 0;
-      vy[i] = 1.2;
+      vy[i] = 1.4;
     }
 
     cr[i] = colour[0];
@@ -167,7 +236,7 @@ let frameCount = 0;
 
 let lastTime = performance.now();
 let lastEmitTime = performance.now();
-const EMIT_FRAME = 15
+const EMIT_FRAME = LINE_PER_FRAME
 const EMIT_INTERVAL = EMIT_FRAME * 16.67;
 
 // The animation only runs while BOTH of these are true:
@@ -202,6 +271,7 @@ if (heroEl) {
     (entries) => {
       entries.forEach((entry) => {
         heroVisible = entry.isIntersecting;
+        if (heroVisible) buildTextMask(); // re-sync mask position in case layout shifted while scrolled away
         updateRunning();
       });
     },
@@ -238,44 +308,61 @@ function updateParticles(dt) {
   }
 }
 
-let PARTICLE_SIZE = 2; // toggle: 1 = single pixel, 2 = 2x2, 3 = 3x3, etc.
+let INSIDE_PARTICLE_SIZE = 4;  // size of particles while inside a letter: 1 = single pixel, 2 = 2x2, etc.
+let OUTSIDE_PARTICLE_SIZE = 2; // size of particles everywhere else
+const OUTSIDE_COLOUR = [49, 46, 86]; // colour particles show outside the letters — change this
 
 // Only iterates over currently-alive particles instead of all MAX slots.
+// Each particle's CENTER pixel is checked against textMask once: if it's
+// inside a letter, the particle is drawn at INSIDE_PARTICLE_SIZE using its
+// real assigned colour; otherwise it's drawn at OUTSIDE_PARTICLE_SIZE using
+// OUTSIDE_COLOUR. (The size decision is made once per particle from its
+// center, not re-checked per pixel of its block — so a large "inside"
+// particle can visually bleed slightly past the exact letter edge, same as
+// a paintbrush stamped at that point.)
 function render() {
   data.fill(0);
 
   const w = canvas.width;
   const h = canvas.height;
-  const half = PARTICLE_SIZE >> 1;
+  const hasMask = textMask.length === w * h;
 
   for (let n = 0; n < activeCount; n++) {
     const i = activeList[n];
     const ix = px[i] | 0;
     const iy = py[i] | 0;
 
-    if (PARTICLE_SIZE <= 1) {
+    if (ix < 0 || ix >= w || iy < 0 || iy >= h) continue;
+
+    const isInside = hasMask && textMask[iy * w + ix] === 1;
+    const size = isInside ? INSIDE_PARTICLE_SIZE : OUTSIDE_PARTICLE_SIZE;
+    const r = isInside ? cr[i] : OUTSIDE_COLOUR[0];
+    const g = isInside ? cg[i] : OUTSIDE_COLOUR[1];
+    const b = isInside ? cb[i] : OUTSIDE_COLOUR[2];
+
+    if (size <= 1) {
       // Fast path for the common single-pixel case, skips the nested loop entirely.
-      if (ix < 0 || ix >= w || iy < 0 || iy >= h) continue;
       const idx = (iy * w + ix) * 4;
-      data[idx] = cr[i];
-      data[idx + 1] = cg[i];
-      data[idx + 2] = cb[i];
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
       data[idx + 3] = 255;
       continue;
     }
 
-    for (let oy = -half; oy < PARTICLE_SIZE - half; oy++) {
+    const half = size >> 1;
+    for (let oy = -half; oy < size - half; oy++) {
       const y = iy + oy;
       if (y < 0 || y >= h) continue;
 
-      for (let ox = -half; ox < PARTICLE_SIZE - half; ox++) {
+      for (let ox = -half; ox < size - half; ox++) {
         const x = ix + ox;
         if (x < 0 || x >= w) continue;
 
         const idx = (y * w + x) * 4;
-        data[idx] = cr[i];
-        data[idx + 1] = cg[i];
-        data[idx + 2] = cb[i];
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
         data[idx + 3] = 255;
       }
     }
@@ -290,7 +377,7 @@ function render() {
 // fewer full passes over the particle array are needed to cover the same
 // distance — keeps this fast enough to not freeze the page on load.
 function fastForward(totalSimulatedFrames) {
-  const stepDt = 12; // each fast-forward step covers ~12 real frames' worth of movement
+  const stepDt = LINE_PER_FRAME; // each fast-forward step covers ~12 real frames' worth of movement
   const steps = Math.ceil(totalSimulatedFrames / stepDt);
   const emitEveryNSteps = Math.max(1, Math.round(EMIT_FRAME / stepDt));
 
@@ -329,10 +416,19 @@ img.src = "assets/images/removed_me.png";
 img.onload = () => {
   buildSpeedMap(img);
 
+  // Build the letter mask once fonts are ready and the canvas has its
+  // final pixel dimensions, so the fillText() call above uses the exact
+  // font that's actually rendering on screen.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(buildTextMask);
+  } else {
+    buildTextMask();
+  }
+
   // 1200 simulated frames ≈ 20 seconds of "normal speed" animation,
   // done instantly. Raise this number if the image still looks sparse
   // when the page first loads, lower it if the initial paint feels slow.
-  fastForward(2500);
+  fastForward(1500);
 
   // starts the live loop only if hero is currently in view and the tab
   // is visible — on a normal page load at the top, both are true
