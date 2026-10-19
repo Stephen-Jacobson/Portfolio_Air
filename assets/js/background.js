@@ -17,6 +17,8 @@ const cb = new Uint8Array(MAX); // blue 0-255
 const LINE_PER_FRAME = 15;
 
 let speedMap = new Float32Array(0);
+// 1 where the speed-map image is NOT black (the face), 0 where it is black.
+let faceMask = new Uint8Array(0);
 let imageData;
 let data;
 
@@ -127,9 +129,101 @@ function buildTextMask() {
   }
 }
 
+// --- Keep the name inside the face --------------------------------------
+// The CSS font-size for .hero-title scales with viewport width (vw), but
+// the face image is a FIXED pixel size that only gets cropped on resize,
+// never scaled. Those two don't track each other, so at wide viewports the
+// name can render wider than the face itself and spill onto the plain
+// background on either side.
+//
+// This measures how wide the face actually is at the row the title sits
+// on, then shrinks/grows the title's font-size (overriding the CSS clamp
+// via an inline style, which always wins) so the rendered text width stays
+// a fixed fraction of that face width — regardless of viewport size.
+const TITLE_FACE_WIDTH_FRACTION = 1; // use ~82% of the face's width, leaving a margin
+const TITLE_MIN_FONT_PX = 14;
+const TITLE_MAX_FONT_PX = 170;
+
+// Scans one canvas row and returns the leftmost/rightmost face-mask pixel.
+function getFaceRowSpan(y) {
+  const w = canvas.width;
+  if (y < 0 || y >= canvas.height || !faceMask.length) return null;
+  let minX = -1, maxX = -1;
+  const rowStart = y * w;
+  for (let x = 0; x < w; x++) {
+    if (faceMask[rowStart + x] === 1) {
+      if (minX === -1) minX = x;
+      maxX = x;
+    }
+  }
+  return minX === -1 ? null : { minX, maxX };
+}
+
+// Narrowest face width across the vertical band the title occupies — using
+// the narrowest row (rather than just the center row) guarantees the text
+// fits the face at every row it actually covers, not just its midline.
+function getFaceWidthForBand(centerY, halfHeight) {
+  const top = Math.max(0, Math.round(centerY - halfHeight));
+  const bottom = Math.min(canvas.height - 1, Math.round(centerY + halfHeight));
+  let minSpan = Infinity;
+  let found = false;
+  for (let y = top; y <= bottom; y += 2) { // step by 2: plenty of precision, half the scanning
+    const span = getFaceRowSpan(y);
+    if (span) {
+      found = true;
+      const width = span.maxX - span.minX;
+      if (width < minSpan) minSpan = width;
+    }
+  }
+  return found ? minSpan : canvas.width;
+}
+
+function fitTitleFontSize() {
+  const title = document.querySelector('.hero-title');
+  if (!title || !canvas.width || !canvas.height || !faceMask.length) return;
+
+  const text = title.textContent.trim();
+  if (!text) return;
+
+  const style = getComputedStyle(title);
+  const fontFamily = style.fontFamily;
+  const fontWeight = style.fontWeight;
+
+  // Same "as if scrollY were 0" normalization buildTextMask() uses, so this
+  // lines up with where the mask actually gets drawn.
+  const canvasRect = canvas.getBoundingClientRect();
+  const titleRect = title.getBoundingClientRect();
+  const normalizedTitleTop = titleRect.top + window.scrollY;
+  const centerYInCanvas = (normalizedTitleTop + titleRect.height / 2) - canvasRect.top;
+
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  const REF = 100; // measure at a fixed reference size, then scale proportionally
+  measureCtx.font = `${fontWeight} ${REF}px ${fontFamily}`;
+  const refWidth = measureCtx.measureText(text).width;
+  if (!refWidth) return;
+
+  // A couple of passes since the row-band we check shifts slightly as the
+  // font-size (and therefore the title's own height) changes.
+  let fontSize = parseFloat(style.fontSize) || REF;
+  for (let i = 0; i < 3; i++) {
+    const halfHeight = fontSize * 0.45;
+    const faceWidth = getFaceWidthForBand(centerYInCanvas, halfHeight);
+    const targetWidth = faceWidth * TITLE_FACE_WIDTH_FRACTION;
+    fontSize = (targetWidth / refWidth) * REF;
+    fontSize = Math.max(TITLE_MIN_FONT_PX, Math.min(TITLE_MAX_FONT_PX, fontSize));
+  }
+
+  title.style.fontSize = fontSize + 'px';
+}
+
+function syncTitleToFace() {
+  fitTitleFontSize(); // shrink/grow the font first...
+  buildTextMask();    // ...then rebuild the mask at that final size/position
+}
+
 // Rebuild whenever layout could have shifted the title's position/size
-// relative to the canvas (e.g. clamp() font-size responding to width).
-window.addEventListener('resize', buildTextMask);
+// relative to the canvas (e.g. the window being resized).
+window.addEventListener('resize', syncTitleToFace);
 
 // Runs ONCE, when the image loads. Canvas is sized to match the image
 // exactly, and this size is never changed again — no resize listener
@@ -148,37 +242,269 @@ function buildSpeedMap(img) {
   const pixels = offCtx.getImageData(0, 0, canvas.width, canvas.height).data;
 
   speedMap = new Float32Array(canvas.width * canvas.height);
+  faceMask = new Uint8Array(canvas.width * canvas.height);
   for (let i = 0; i < speedMap.length; i++) {
     const brightness = pixels[i * 4] / 255;
     speedMap[i] = 0.20 + (1.0 - brightness) * 0.80;
+    faceMask[i] = pixels[i * 4] > BLACK_THRESHOLD ? 1 : 0;
   }
 
   imageData = ctx.createImageData(canvas.width, canvas.height);
   data = imageData.data;
 }
 
-// const COLOURS = [
-//   [255, 0, 0], // red
-//   [0, 255, 0], // green
-//   [0, 0, 255], // blue
-// ];
-// const COLOURS = [
-//   [0, 255, 255],   // I - cyan
-//   [255, 255, 0],   // O - yellow
-//   [160, 0, 160],   // T - purple
-//   [0, 255, 0],     // S - green
-//   [255, 0, 0],     // Z - red
-//   [0, 0, 255],     // J - blue
-//   [255, 165, 0],   // L - orange
-// ];
-const COLOURS = [
-  [255, 255, 255], // white
-]
+
+// =========================================================================
+//  PARTICLE STYLE — the main switch
+// =========================================================================
+//  'both'   : TWO simulations run at once, each visible only in its own area,
+//             decided by the speed-map image (removed_me.png):
+//               - pure BLACK parts of the image  -> falling Tetris blocks
+//               - everything else (your face)    -> small line-particles in
+//                                                   the Tetris colours
+//  'tetris' : only the Tetris blocks, shown everywhere.
+//  'lines'  : only the line-particles, shown everywhere.
+//
+//  Both simulations use the same speed map, so the particles still slow
+//  down and build up your face.
+//
+//  You can also change these live from the browser console, e.g.
+//    setParticleStyle('lines')
+//    setTetrisBlockSize(10)
+//    setNameColour(255, 255, 255)    // or setNameColour(null) to turn it off
+let PARTICLE_STYLE = 'both';
+
+// --- Name colour -----------------------------------------------------------
+// Anything (blocks OR particles) that is over the title letters is drawn in
+// this single colour: [red, green, blue], each 0-255. Set to null to let
+// them keep their own Tetris colours inside the letters instead.
+let NAME_COLOUR = [255, 255, 255];
+
+// --- Which parts of the image count as "black" (block area) ---------------
+// A pixel of removed_me.png is "black" when its brightness is <= this value
+// (0 = pure black only, 255 = everything). Raise it a little (e.g. 10-30)
+// if you see stray blocks creeping onto the soft edge of the face.
+let BLACK_THRESHOLD = 0.2;
+
+// --- Face particle options (the non-black area) ---------------------------
+let PARTICLE_COLOUR_PER = 'line';   // 'line': each emitted line is one Tetris colour (cycling). 'particle': random colour per particle
+let PARTICLE_OUTSIDE_COLOURED = true; // true: Tetris colours outside the name. false: use OUTSIDE_COLOUR
+let PARTICLE_OUTSIDE_BRIGHTNESS = 0.5; // 0-1, brightness of those particles outside the name
+
+// --- Tetris options (only used when PARTICLE_STYLE === 'tetris') ----------
+let TETRIS_BLOCK_SIZE = 24;          // size of ONE square of a tetromino, in canvas pixels
+let TETRIS_SPAWN_DENSITY = 0.04;       // 1 = default, 2 = twice as many blocks, 0.5 = half
+let TETRIS_FALL_SPEED = 1;        // base fall speed (same units as the old vy = 1.4)
+let TETRIS_SNAP_TO_GRID = true;     // true: blocks snap to a grid (retro stepped look). false: smooth
+let TETRIS_CELL_BORDER = true;      // darker edge on each square so the 4 cells of a piece read clearly
+let TETRIS_OUTSIDE_COLOURED = true; // true: blocks outside the name keep their Tetris colour (dimmed). false: use OUTSIDE_COLOUR
+let TETRIS_OUTSIDE_BRIGHTNESS = 0.35; // 0-1, how bright blocks are outside the title letters
+const TETRIS_MAX_PIECES = 120000;
+
+// Same colours as tetris-replay.js (index = piece type).
+const TETRIS_COLOURS = [
+  [0, 255, 255],   // I - cyan
+  [255, 255, 0],   // O - yellow
+  [160, 0, 160],   // T - purple
+  [0, 255, 0],     // S - green
+  [255, 0, 0],     // Z - red
+  [0, 0, 255],     // J - blue
+  [255, 165, 0],   // L - orange
+];
+
+// Each shape is a list of 4 [col, row] cells.
+const TETRIS_SHAPES = [
+  [[0, 0], [1, 0], [2, 0], [3, 0]], // I
+  [[0, 0], [1, 0], [0, 1], [1, 1]], // O
+  [[1, 0], [0, 1], [1, 1], [2, 1]], // T
+  [[1, 0], [2, 0], [0, 1], [1, 1]], // S
+  [[0, 0], [1, 0], [1, 1], [2, 1]], // Z
+  [[0, 0], [0, 1], [1, 1], [2, 1]], // J
+  [[2, 0], [0, 1], [1, 1], [2, 1]], // L
+];
+
+// --- Piece pool (same swap-removal idea as the particle pool) -------------
+const tx = new Float32Array(TETRIS_MAX_PIECES);   // top-left of the piece's bounding box
+const ty = new Float32Array(TETRIS_MAX_PIECES);
+const tType = new Uint8Array(TETRIS_MAX_PIECES);
+const tCells = new Int8Array(TETRIS_MAX_PIECES * 8); // 4 cells * (col,row), already rotated
+const tW = new Uint8Array(TETRIS_MAX_PIECES);     // bounding box in cells
+const tH = new Uint8Array(TETRIS_MAX_PIECES);
+const tSize = new Uint8Array(TETRIS_MAX_PIECES);  // block size this piece was spawned with
+const tFall = new Float32Array(TETRIS_MAX_PIECES);// per-piece speed multiplier (the "random" feel)
+const tActive = new Int32Array(TETRIS_MAX_PIECES);
+let tCount = 0;
+let spawnAccumulator = 0;
+
+function spawnTetromino(yJitter) {
+  if (tCount >= TETRIS_MAX_PIECES) return;
+  const i = tCount++;
+  tActive[i] = i; // pieces are stored densely, slot == index
+
+  const type = (Math.random() * 7) | 0;
+  const rot = (Math.random() * 4) | 0;
+  let cells = TETRIS_SHAPES[type].map(c => [c[0], c[1]]);
+  for (let r = 0; r < rot; r++) cells = cells.map(c => [-c[1], c[0]]); // rotate 90°
+  const minC = Math.min(...cells.map(c => c[0]));
+  const minR = Math.min(...cells.map(c => c[1]));
+  let w = 0, h = 0;
+  for (let k = 0; k < 4; k++) {
+    const c = cells[k][0] - minC, r = cells[k][1] - minR;
+    tCells[i * 8 + k * 2] = c;
+    tCells[i * 8 + k * 2 + 1] = r;
+    if (c + 1 > w) w = c + 1;
+    if (r + 1 > h) h = r + 1;
+  }
+
+  const size = Math.max(1, TETRIS_BLOCK_SIZE | 0);
+  tType[i] = type;
+  tW[i] = w;
+  tH[i] = h;
+  tSize[i] = size;
+  tFall[i] = 0.7 + Math.random() * 0.6; // 0.7x - 1.3x speed
+
+  let x = Math.random() * (canvas.width - w * size);
+  if (TETRIS_SNAP_TO_GRID) x = Math.round(x / size) * size;
+  tx[i] = x;
+  ty[i] = -h * size + yJitter;
+}
+
+function updateTetrominoes(dt) {
+  const w = canvas.width;
+  const h = canvas.height;
+  for (let i = 0; i < tCount; i++) {
+    const size = tSize[i];
+    // Speed is sampled at the piece's centre so the whole piece moves rigidly.
+    const cx = Math.min(w - 1, Math.max(0, (tx[i] + tW[i] * size / 2) | 0));
+    const cy = Math.min(h - 1, Math.max(0, (ty[i] + tH[i] * size / 2) | 0));
+    const speed = speedMap[cy * w + cx];
+    ty[i] += TETRIS_FALL_SPEED * tFall[i] * speed * dt;
+
+    if (ty[i] > h) {
+      // swap-remove: move the last piece into slot i
+      const last = --tCount;
+      if (i !== last) {
+        tx[i] = tx[last]; ty[i] = ty[last]; tType[i] = tType[last];
+        tW[i] = tW[last]; tH[i] = tH[last]; tSize[i] = tSize[last]; tFall[i] = tFall[last];
+        for (let k = 0; k < 8; k++) tCells[i * 8 + k] = tCells[last * 8 + k];
+      }
+      i--; // recheck the piece that was swapped in
+    }
+  }
+}
+
+// Spawns pieces at random times/positions. Called every frame with that
+// frame's dt; fractional spawns are carried over in spawnAccumulator.
+function emitTetrominoes(dt) {
+  const size = Math.max(1, TETRIS_BLOCK_SIZE | 0);
+  const perFrame = TETRIS_SPAWN_DENSITY * canvas.width / (size * 2 * LINE_PER_FRAME);
+  spawnAccumulator += perFrame * dt;
+  const fallPerStep = TETRIS_FALL_SPEED * dt;
+  while (spawnAccumulator >= 1) {
+    spawnAccumulator -= 1;
+    spawnTetromino(Math.random() * fallPerStep); // jitter so pieces don't spawn in a visible row
+  }
+}
+
+function renderTetrominoes() {
+  const w = canvas.width;
+  const h = canvas.height;
+  const hasMask = textMask.length === w * h;
+  // In 'both' mode blocks only show in the black part of the speed map.
+  const clipToBlack = PARTICLE_STYLE === 'both' && faceMask.length === w * h;
+
+  for (let i = 0; i < tCount; i++) {
+    const size = tSize[i];
+    const base = TETRIS_COLOURS[tType[i]];
+    const ox = tx[i];
+    let oy = ty[i];
+    if (TETRIS_SNAP_TO_GRID) oy = Math.round(oy / size) * size;
+
+    for (let k = 0; k < 4; k++) {
+      const x0 = (ox + tCells[i * 8 + k * 2] * size) | 0;
+      const y0 = (oy + tCells[i * 8 + k * 2 + 1] * size) | 0;
+      const cxp = x0 + (size >> 1);
+      const cyp = y0 + (size >> 1);
+      if (x0 >= w || y0 >= h || x0 + size <= 0 || y0 + size <= 0) continue;
+
+      let inside = false;
+      if (hasMask && cxp >= 0 && cxp < w && cyp >= 0 && cyp < h) {
+        inside = textMask[cyp * w + cxp] === 1;
+      }
+
+      let r, g, b;
+      if (inside) {
+        if (NAME_COLOUR) { r = NAME_COLOUR[0]; g = NAME_COLOUR[1]; b = NAME_COLOUR[2]; }
+        else { r = base[0]; g = base[1]; b = base[2]; }
+      } else if (TETRIS_OUTSIDE_COLOURED) {
+        r = base[0] * TETRIS_OUTSIDE_BRIGHTNESS;
+        g = base[1] * TETRIS_OUTSIDE_BRIGHTNESS;
+        b = base[2] * TETRIS_OUTSIDE_BRIGHTNESS;
+      } else {
+        r = OUTSIDE_COLOUR[0]; g = OUTSIDE_COLOUR[1]; b = OUTSIDE_COLOUR[2];
+      }
+
+      const useBorder = TETRIS_CELL_BORDER && size >= 4;
+      const br = r * 0.55, bg = g * 0.55, bb = b * 0.55;
+
+      for (let yy = 0; yy < size; yy++) {
+        const y = y0 + yy;
+        if (y < 0 || y >= h) continue;
+        for (let xx = 0; xx < size; xx++) {
+          const x = x0 + xx;
+          if (x < 0 || x >= w) continue;
+          const p = y * w + x;
+          if (clipToBlack && faceMask[p] === 1) continue; // face area belongs to the particles
+          const edge = useBorder && (xx === size - 1 || yy === size - 1);
+          const idx = p * 4;
+          data[idx] = edge ? br : r;
+          data[idx + 1] = edge ? bg : g;
+          data[idx + 2] = edge ? bb : b;
+          data[idx + 3] = 255;
+        }
+      }
+    }
+  }
+}
+
+// --- Runtime switches (callable from the console) --------------------------
+function clearAllParticles() {
+  while (activeCount > 0) killParticle(activeList[activeCount - 1]);
+  tCount = 0;
+  spawnAccumulator = 0;
+}
+
+function restartAnimation() {
+  clearAllParticles();
+  if (speedMap.length) fastForward(1500);
+}
+
+function setParticleStyle(style) {
+  PARTICLE_STYLE = (style === 'lines' || style === 'tetris') ? style : 'both';
+  restartAnimation();
+}
+
+function setNameColour(r, g, b) {
+  NAME_COLOUR = (r === null || r === undefined) ? null : [r, g, b];
+}
+window.setNameColour = setNameColour;
+
+function usesLines() { return PARTICLE_STYLE !== 'tetris'; }
+function usesTetris() { return PARTICLE_STYLE !== 'lines'; }
+
+function setTetrisBlockSize(px) {
+  TETRIS_BLOCK_SIZE = Math.max(1, px | 0);
+  restartAnimation();
+}
+window.setParticleStyle = setParticleStyle;
+window.setTetrisBlockSize = setTetrisBlockSize;
+
 let lineIndex = 0;
 
 function emitLine() {
-  const colour = COLOURS[lineIndex % COLOURS.length];
+  const lineColour = TETRIS_COLOURS[lineIndex % TETRIS_COLOURS.length];
   lineIndex++;
+  const perParticle = PARTICLE_COLOUR_PER === 'particle';
 
   const isHorizontal = orientation === 'horizontal';
   const limit = isHorizontal ? canvas.height : canvas.width;
@@ -199,6 +525,9 @@ function emitLine() {
       vy[i] = 1.4;
     }
 
+    const colour = perParticle
+      ? TETRIS_COLOURS[(Math.random() * TETRIS_COLOURS.length) | 0]
+      : lineColour;
     cr[i] = colour[0];
     cg[i] = colour[1];
     cb[i] = colour[2];
@@ -271,7 +600,7 @@ if (heroEl) {
     (entries) => {
       entries.forEach((entry) => {
         heroVisible = entry.isIntersecting;
-        if (heroVisible) buildTextMask(); // re-sync mask position in case layout shifted while scrolled away
+        if (heroVisible) syncTitleToFace(); // re-sync font size + mask position in case layout shifted while scrolled away
         updateRunning();
       });
     },
@@ -326,6 +655,8 @@ function render() {
   const w = canvas.width;
   const h = canvas.height;
   const hasMask = textMask.length === w * h;
+  // In 'both' mode the line-particles only show on the face (non-black) area.
+  const clipToFace = PARTICLE_STYLE === 'both' && faceMask.length === w * h;
 
   for (let n = 0; n < activeCount; n++) {
     const i = activeList[n];
@@ -336,30 +667,32 @@ function render() {
 
     const isInside = hasMask && textMask[iy * w + ix] === 1;
     const size = isInside ? INSIDE_PARTICLE_SIZE : OUTSIDE_PARTICLE_SIZE;
-    const r = isInside ? cr[i] : OUTSIDE_COLOUR[0];
-    const g = isInside ? cg[i] : OUTSIDE_COLOUR[1];
-    const b = isInside ? cb[i] : OUTSIDE_COLOUR[2];
 
-    if (size <= 1) {
-      // Fast path for the common single-pixel case, skips the nested loop entirely.
-      const idx = (iy * w + ix) * 4;
-      data[idx] = r;
-      data[idx + 1] = g;
-      data[idx + 2] = b;
-      data[idx + 3] = 255;
-      continue;
+    let r, g, b;
+    if (isInside) {
+      if (NAME_COLOUR) { r = NAME_COLOUR[0]; g = NAME_COLOUR[1]; b = NAME_COLOUR[2]; }
+      else { r = cr[i]; g = cg[i]; b = cb[i]; }
+    } else if (PARTICLE_OUTSIDE_COLOURED) {
+      r = cr[i] * PARTICLE_OUTSIDE_BRIGHTNESS;
+      g = cg[i] * PARTICLE_OUTSIDE_BRIGHTNESS;
+      b = cb[i] * PARTICLE_OUTSIDE_BRIGHTNESS;
+    } else {
+      r = OUTSIDE_COLOUR[0]; g = OUTSIDE_COLOUR[1]; b = OUTSIDE_COLOUR[2];
     }
 
     const half = size >> 1;
-    for (let oy = -half; oy < size - half; oy++) {
+    for (let oy = -half; oy < Math.max(size, 1) - half; oy++) {
       const y = iy + oy;
       if (y < 0 || y >= h) continue;
 
-      for (let ox = -half; ox < size - half; ox++) {
+      for (let ox = -half; ox < Math.max(size, 1) - half; ox++) {
         const x = ix + ox;
         if (x < 0 || x >= w) continue;
 
-        const idx = (y * w + x) * 4;
+        const p = y * w + x;
+        if (clipToFace && faceMask[p] === 0) continue; // black area belongs to the Tetris blocks
+
+        const idx = p * 4;
         data[idx] = r;
         data[idx + 1] = g;
         data[idx + 2] = b;
@@ -367,6 +700,8 @@ function render() {
       }
     }
   }
+
+  if (usesTetris()) renderTetrominoes();
 
   ctx.putImageData(imageData, 0, 0);
 }
@@ -382,8 +717,14 @@ function fastForward(totalSimulatedFrames) {
   const emitEveryNSteps = Math.max(1, Math.round(EMIT_FRAME / stepDt));
 
   for (let s = 0; s < steps; s++) {
-    if (s % emitEveryNSteps === 0) emitLine();
-    updateParticles(stepDt);
+    if (usesTetris()) {
+      emitTetrominoes(stepDt);
+      updateTetrominoes(stepDt);
+    }
+    if (usesLines()) {
+      if (s % emitEveryNSteps === 0) emitLine();
+      updateParticles(stepDt);
+    }
   }
 
   render();
@@ -402,12 +743,17 @@ function loop() {
     lastTime = now;
   }
 
-  if (now - lastEmitTime >= EMIT_INTERVAL) {
-    emitLine();
-    lastEmitTime = now;
+  if (usesTetris()) {
+    emitTetrominoes(dt);
+    updateTetrominoes(dt);
   }
-
-  updateParticles(dt);
+  if (usesLines()) {
+    if (now - lastEmitTime >= EMIT_INTERVAL) {
+      emitLine();
+      lastEmitTime = now;
+    }
+    updateParticles(dt);
+  }
   render();
 }
 
@@ -420,9 +766,9 @@ img.onload = () => {
   // final pixel dimensions, so the fillText() call above uses the exact
   // font that's actually rendering on screen.
   if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(buildTextMask);
+    document.fonts.ready.then(syncTitleToFace);
   } else {
-    buildTextMask();
+    syncTitleToFace();
   }
 
   // 1200 simulated frames ≈ 20 seconds of "normal speed" animation,

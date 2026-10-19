@@ -32,7 +32,7 @@
    underneath, not this element. */
 .hero-title {
   position: relative;
-  font-size: clamp(1.8rem, 9.2vw, 7.2rem);
+  font-size: clamp(1.6rem, 8.2vw, 6.6rem);
   font-weight: 700;
   margin: 0;
   color: transparent;
