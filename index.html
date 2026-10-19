@@ -5,6 +5,7 @@
         <link rel="stylesheet" href="assets/css/style.css" />
         <link rel="stylesheet" href="assets/css/background.css" />
         <link rel="stylesheet" href="assets/css/tetris.css" />
+        <link rel="stylesheet" href="assets/css/drone.css" />
     </head>
     <body style="background-color:black;">
         <!-- bg-viewport is the "window" the user looks through. It's fixed to
@@ -63,6 +64,45 @@
                 </section>
             </main>
         </section>
+
+        <section class="filler filler--drone">
+            <main>
+                <section id="drone-demo">
+                    <div class="drone-info">
+                        <h2>Autonomous Drone Navigation</h2>
+                        <p>This is a passion project I proposed and have been working on with my friends.</p>
+                        <p>We are currently developing a Drone Crop-Watering model, Drone Navigation to a Point model, and a Drone Surveying Complex Environment model.</p>
+                        <h3>Drone Crop-Watering</h3>
+                        <p>A continuous-control reinforcement learning agent, built with a couple of friends, that flies a drone through a procedurally generated 3D voxel farm, avoiding terrain and trees while watering the crop regions that need it. We built the whole stack ourselves: a custom voxel terrain generator, a vectorised lidar-style raycasting engine for obstacle sensing and spray coverage, a region-completion tracker, and an Open3D live viewer for watching it fly.</p>
+                        <p>The policy is trained with PPO (via TorchRL) on a 5-dimensional continuous action: 3D movement direction, a spray on/off toggle, and a learned move-speed scale. The drone is handed one needs-water region at a time, always the nearest unfinished one, with reward shaping and a staged difficulty curriculum scoped to whichever region is currently active.</p>
+                        <p>What's below is a real recorded rollout from a trained checkpoint, replayed in the browser: the 3D voxel world the drone actually flew through, its flight path and spray bursts, the pink line showing where its own network is aiming next, and the live coverage map tracking how much of the active region has been watered.</p>
+                        <ul class="drone-legend">
+                            <li><span class="swatch" style="background:#8b6a3e"></span>Topsoil</li>
+                            <li><span class="swatch" style="background:#737373"></span>Rock</li>
+                            <li><span class="swatch" style="background:#59321a"></span>Path</li>
+                            <li><span class="swatch" style="background:#99cc66"></span>Needs water</li>
+                            <li><span class="swatch" style="background:#99404f"></span>No water needed</li>
+                            <li><span class="swatch" style="background:#ff1ad9"></span>Model's target</li>
+                        </ul>
+                    </div>
+
+                    <div class="drone-visual">
+                        <div class="drone-stats">
+                            <span>Step: <strong id="drone-stat-step">0</strong></span>
+                            <span>Active region: <strong id="drone-stat-coverage">0%</strong> watered</span>
+                            <span>Reward: <strong id="drone-stat-reward">0.0</strong></span>
+                            <span>Status: <strong id="drone-stat-status">watering</strong></span>
+                        </div>
+                        <div id="drone-canvas-wrap"></div>
+                        <div class="drone-coverage-row">
+                            <canvas id="drone-coverage-canvas"></canvas>
+                            <p class="drone-coverage-caption">Live coverage map: how much of the drone's <em>currently assigned</em> region still needs spraying (bright = untouched, dark = done). The red dot is the drone's position from directly above.</p>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </section>
+
         <section class="filler"></section>
         
 
@@ -73,5 +113,8 @@
         <script src="assets/js/background.js"></script>
         <script src="assets/js/main.js"></script>
         <script src="assets/js/tetris-replay.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+        <script src="assets/js/drone-replay.js"></script>
     </body>
 </html>
