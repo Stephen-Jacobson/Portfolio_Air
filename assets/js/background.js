@@ -117,8 +117,12 @@ function buildTextMask() {
 
   // Title's center point, translated from viewport space into the canvas's
   // own pixel space by subtracting the canvas's viewport offset.
-  const textX = titleRect.left + titleRect.width / 2 - canvasRect.left;
-  const textY = normalizedTitleTop + titleRect.height / 2 - canvasRect.top;
+  // cs = on-screen size of one canvas pixel (1 on desktop; <1 or >1 when the
+  // mobile layout scales the canvas), so we convert screen px -> canvas px.
+  const cs = canvasRect.width / canvas.width || 1;
+  const textX = (titleRect.left + titleRect.width / 2 - canvasRect.left) / cs;
+  const textY = (normalizedTitleTop + titleRect.height / 2 - canvasRect.top) / cs;
+  octx.font = `${style.fontWeight} ${parseFloat(style.fontSize) / cs}px ${style.fontFamily}`;
   octx.fillText(title.textContent.trim(), textX, textY);
 
   const maskPixels = octx.getImageData(0, 0, off.width, off.height).data;
@@ -194,7 +198,8 @@ function fitTitleFontSize() {
   const canvasRect = canvas.getBoundingClientRect();
   const titleRect = title.getBoundingClientRect();
   const normalizedTitleTop = titleRect.top + window.scrollY;
-  const centerYInCanvas = (normalizedTitleTop + titleRect.height / 2) - canvasRect.top;
+  const cs = canvasRect.width / canvas.width || 1; // screen px per canvas px
+  const centerYInCanvas = ((normalizedTitleTop + titleRect.height / 2) - canvasRect.top) / cs;
 
   const measureCtx = document.createElement('canvas').getContext('2d');
   const REF = 100; // measure at a fixed reference size, then scale proportionally
@@ -206,9 +211,9 @@ function fitTitleFontSize() {
   // font-size (and therefore the title's own height) changes.
   let fontSize = parseFloat(style.fontSize) || REF;
   for (let i = 0; i < 3; i++) {
-    const halfHeight = fontSize * 0.45;
+    const halfHeight = (fontSize / cs) * 0.45;
     const faceWidth = getFaceWidthForBand(centerYInCanvas, halfHeight);
-    const targetWidth = faceWidth * TITLE_FACE_WIDTH_FRACTION;
+    const targetWidth = faceWidth * cs * TITLE_FACE_WIDTH_FRACTION;
     fontSize = (targetWidth / refWidth) * REF;
     fontSize = Math.max(TITLE_MIN_FONT_PX, Math.min(TITLE_MAX_FONT_PX, fontSize));
   }
@@ -216,7 +221,44 @@ function fitTitleFontSize() {
   title.style.fontSize = fontSize + 'px';
 }
 
+// --- Mobile layout ---------------------------------------------------------
+// On narrow screens the fixed 1920x1080 landscape canvas can't just be
+// centered and cropped (that leaves big black bands above/below the face).
+// Instead we scale it so the face fills the screen width, pin its top to the
+// top of the screen, and make the hero exactly as tall as the scaled image.
+const MOBILE_MAX_WIDTH = 720;
+function layoutCanvas() {
+  const hero = document.getElementById('hero');
+  if (!canvas.width || !faceMask.length) return;
+
+  if (window.innerWidth > MOBILE_MAX_WIDTH) {
+    canvas.style.top = canvas.style.left = canvas.style.transform = canvas.style.transformOrigin = '';
+    if (hero) hero.style.height = '';
+    return;
+  }
+
+  // Horizontal extent of the face (columns with a decent number of pixels).
+  const w = canvas.width, h = canvas.height;
+  let minX = w, maxX = 0;
+  for (let x = 0; x < w; x += 2) {
+    let n = 0;
+    for (let y = 0; y < h; y += 4) if (faceMask[y * w + x]) n++;
+    if (n > 5) { if (x < minX) minX = x; maxX = x; }
+  }
+  if (maxX <= minX) { minX = 0; maxX = w; }
+
+  const vw = document.documentElement.clientWidth;
+  const s = (vw / (maxX - minX)) * 1.05;           // face a touch wider than the screen
+  const x = vw / 2 - ((minX + maxX) / 2) * s;
+  canvas.style.top = '0';
+  canvas.style.left = '0';
+  canvas.style.transformOrigin = '0 0';
+  canvas.style.transform = `translate(${x}px, 0) scale(${s})`;
+  if (hero) hero.style.height = Math.round(h * s) + 'px';
+}
+
 function syncTitleToFace() {
+  layoutCanvas();     // position/scale the canvas first (mobile only)
   fitTitleFontSize(); // shrink/grow the font first...
   buildTextMask();    // ...then rebuild the mask at that final size/position
 }

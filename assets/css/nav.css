@@ -1,0 +1,38 @@
+/* Nav is built by nav.js from every [data-nav] element on the page. */
+#site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+#site-nav::-webkit-scrollbar { display: none; }
+
+#site-nav a {
+  flex: none;
+  color: #bbb;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: color .2s, background .2s;
+}
+#site-nav a:hover { color: #fff; }
+#site-nav a.active { color: #000; background: #fff; }
+
+html { scroll-behavior: smooth; }
+[data-nav] { scroll-margin-top: 0; }
+
+@media (max-width: 720px) {
+  #site-nav { justify-content: flex-start; padding: 8px 10px; }
+  #site-nav a { font-size: 0.85rem; padding: 6px 12px; }
+}

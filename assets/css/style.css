@@ -45,3 +45,13 @@
   height: 100vh;
   background: #000;
 }
+
+/* Content sections: 100vh on desktop, but on phones they are only as tall as
+   their content (this was the huge gap between projects). */
+.filler--end { height: 30vh; }
+footer { color: #777; text-align: center; padding: 40px 0; }
+
+@media (max-width: 720px) {
+  .filler { height: auto; }
+  .filler--end { height: 0; }
+}

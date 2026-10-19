@@ -126,3 +126,15 @@
     max-width: 100%;
   }
 }
+@media (max-width: 720px) {
+  .filler--drone { padding: 24px 6vw 56px; }
+  #drone-demo { gap: 24px; }
+  .drone-info h2 { font-size: 1.6rem; }
+  .drone-info p { font-size: 1rem; }
+}
+
+/* In a column layout, flex-basis becomes a HEIGHT: the old 420px / 500px
+   bases were forcing huge empty gaps on phones. Reset them. */
+@media (max-width: 720px) {
+  .drone-info, .drone-visual { flex: none; min-width: 0; width: 100%; }
+}

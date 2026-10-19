@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
-        <title>My First Page</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Stephen Jacobson</title>
         <link rel="stylesheet" href="assets/css/style.css" />
         <link rel="stylesheet" href="assets/css/background.css" />
         <link rel="stylesheet" href="assets/css/tetris.css" />
         <link rel="stylesheet" href="assets/css/drone.css" />
+        <link rel="stylesheet" href="assets/css/nav.css" />
     </head>
     <body style="background-color:black;">
+        <!-- Filled in automatically by assets/js/nav.js -->
+        <nav id="site-nav" aria-label="Main"></nav>
+
         <!-- bg-viewport is the "window" the user looks through. It's fixed to
              the screen and clips (overflow: hidden) anything outside it.
              The canvas inside stays a constant, fixed size and is centered
@@ -26,7 +32,7 @@
                  inside the letters — the text itself stays invisible
                  (color: transparent in CSS), it's the canvas underneath
                  doing the visible work. -->
-            <section id="hero">
+            <section id="hero" data-nav="Home">
                 <h1 class="hero-title">Stephen Jacobson</h1>
             </section>
 
@@ -44,7 +50,10 @@
         <div id="blur-overlay"></div>
 
         <!-- plain black filler sections to scroll through for now -->
-        <section class="filler filler--tetris">
+        <!-- NAV: any element with data-nav="Label" (and an id) becomes a nav link
+             automatically. To add a new project: give its section an id and
+             a data-nav, nothing else to edit. -->
+        <section class="filler filler--tetris" id="tetris" data-nav="Tetris AI">
             <main>
                 <section id="tetris-demo">
                     <div class="tetris-info">
@@ -65,7 +74,7 @@
             </main>
         </section>
 
-        <section class="filler filler--drone">
+        <section class="filler filler--drone" id="drone" data-nav="Drone">
             <main>
                 <section id="drone-demo">
                     <div class="drone-info">
@@ -103,15 +112,16 @@
             </main>
         </section>
 
-        <section class="filler"></section>
+        <section class="filler filler--end"></section>
         
 
         <div class="container">
-            <footer>...</footer>
+            <footer id="contact" data-nav="Contact">...</footer>
         </div>
 
         <script src="assets/js/background.js"></script>
         <script src="assets/js/main.js"></script>
+        <script src="assets/js/nav.js"></script>
         <script src="assets/js/tetris-replay.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
