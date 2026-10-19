@@ -102,11 +102,11 @@ function buildTextMask() {
   octx.textAlign = 'center';
 
   // titleRect.top is scroll-dependent (it shrinks/goes negative as you
-  // scroll down), but canvasRect.top is NOT — the canvas is position:
+  // scroll down), but canvasRect.top is NOT - the canvas is position:
   // fixed, so it never moves regardless of scroll. If buildTextMask() runs
   // while the page is scrolled away from the hero (e.g. a reload that
   // restores scroll position below the fold), using titleRect.top directly
-  // bakes in the wrong offset — the mask ends up placed wherever the title
+  // bakes in the wrong offset - the mask ends up placed wherever the title
   // happened to be on screen at that scroll position, not where it sits
   // relative to the canvas when the hero is actually in view.
   //
@@ -143,7 +143,7 @@ function buildTextMask() {
 // This measures how wide the face actually is at the row the title sits
 // on, then shrinks/grows the title's font-size (overriding the CSS clamp
 // via an inline style, which always wins) so the rendered text width stays
-// a fixed fraction of that face width — regardless of viewport size.
+// a fixed fraction of that face width - regardless of viewport size.
 const TITLE_FACE_WIDTH_FRACTION = 1; // use ~82% of the face's width, leaving a margin
 const TITLE_MIN_FONT_PX = 14;
 const TITLE_MAX_FONT_PX = 170;
@@ -163,7 +163,7 @@ function getFaceRowSpan(y) {
   return minX === -1 ? null : { minX, maxX };
 }
 
-// Narrowest face width across the vertical band the title occupies — using
+// Narrowest face width across the vertical band the title occupies - using
 // the narrowest row (rather than just the center row) guarantees the text
 // fits the face at every row it actually covers, not just its midline.
 function getFaceWidthForBand(centerY, halfHeight) {
@@ -268,7 +268,7 @@ function syncTitleToFace() {
 window.addEventListener('resize', syncTitleToFace);
 
 // Runs ONCE, when the image loads. Canvas is sized to match the image
-// exactly, and this size is never changed again — no resize listener
+// exactly, and this size is never changed again - no resize listener
 // touches canvas.width/height. Centering as the browser window changes
 // size is handled entirely by CSS (see background.css) via an
 // overflow:hidden container that crops the fixed-size canvas.
@@ -297,7 +297,7 @@ function buildSpeedMap(img) {
 
 
 // =========================================================================
-//  PARTICLE STYLE — the main switch
+//  PARTICLE STYLE - the main switch
 // =========================================================================
 //  'both'   : TWO simulations run at once, each visible only in its own area,
 //             decided by the speed-map image (removed_me.png):
@@ -612,7 +612,7 @@ const EMIT_INTERVAL = EMIT_FRAME * 16.67;
 
 // The animation only runs while BOTH of these are true:
 //  - the browser tab is actually visible (tabVisible)
-//  - the #hero section is on screen (heroVisible) — once you scroll past
+//  - the #hero section is on screen (heroVisible) - once you scroll past
 //    it into the black filler content, there's no reason to keep spending
 //    CPU animating something no longer being looked at
 let tabVisible = !document.hidden;
@@ -681,14 +681,14 @@ function updateParticles(dt) {
 
 let INSIDE_PARTICLE_SIZE = 4;  // size of particles while inside a letter: 1 = single pixel, 2 = 2x2, etc.
 let OUTSIDE_PARTICLE_SIZE = 2; // size of particles everywhere else
-const OUTSIDE_COLOUR = [49, 46, 86]; // colour particles show outside the letters — change this
+const OUTSIDE_COLOUR = [49, 46, 86]; // colour particles show outside the letters - change this
 
 // Only iterates over currently-alive particles instead of all MAX slots.
 // Each particle's CENTER pixel is checked against textMask once: if it's
 // inside a letter, the particle is drawn at INSIDE_PARTICLE_SIZE using its
 // real assigned colour; otherwise it's drawn at OUTSIDE_PARTICLE_SIZE using
 // OUTSIDE_COLOUR. (The size decision is made once per particle from its
-// center, not re-checked per pixel of its block — so a large "inside"
+// center, not re-checked per pixel of its block - so a large "inside"
 // particle can visually bleed slightly past the exact letter edge, same as
 // a paintbrush stamped at that point.)
 function render() {
@@ -752,7 +752,7 @@ function render() {
 // canvas already looks "complete" on first paint instead of building up
 // from blank. Uses a bigger dt per step than a real frame would, so far
 // fewer full passes over the particle array are needed to cover the same
-// distance — keeps this fast enough to not freeze the page on load.
+// distance - keeps this fast enough to not freeze the page on load.
 function fastForward(totalSimulatedFrames) {
   const stepDt = LINE_PER_FRAME; // each fast-forward step covers ~12 real frames' worth of movement
   const steps = Math.ceil(totalSimulatedFrames / stepDt);
@@ -819,10 +819,10 @@ img.onload = () => {
   fastForward(1500);
 
   // starts the live loop only if hero is currently in view and the tab
-  // is visible — on a normal page load at the top, both are true
+  // is visible - on a normal page load at the top, both are true
   updateRunning();
 };
 
-// No resize listener at all — the canvas never changes size after load.
+// No resize listener at all - the canvas never changes size after load.
 // The browser window resizing only affects how much of it is visible,
 // via the CSS crop in background.css.
